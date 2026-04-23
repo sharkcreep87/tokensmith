@@ -20,6 +20,8 @@
     "commands",
     "hooks",
     "skills",
+    "docs/logo.svg",
+    "docs/logo-dark.svg",
     "token-smith.config.example.json",
     "README.md",
     "CHANGELOG.md",
