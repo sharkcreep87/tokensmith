@@ -8,7 +8,31 @@ important context across sessions so Claude never has to re-read your project
 to answer the same question twice, compresses long conversations into concise
 summaries, and reports exactly how many tokens it saved you.
 
-![TokenSmith screenshot placeholder](./docs/screenshot-main.png)
+```text
+$ tokensmith --help
+Usage: tokensmith [options] [command]
+
+TokenSmith — persistent memory, reusable skills, and smart context for Claude Code.
+
+Options:
+  -v, --version        Show version
+  --db <path>          override database path
+  --namespace <name>   override namespace
+  --no-color           disable color output
+  --log-level <level>  silent | error | warn | info | debug
+  -h, --help           display help for command
+
+Commands:
+  init                 Create a token-smith.config.json and .tokensmith DB
+  memory               Persistent, namespaced memories saved to SQLite
+  skill                Reusable prompt templates ('skills')
+  context <query...>   Build a compressed, relevance-ranked context bundle
+  compress             Compress long session/project history into summaries
+  tokens               Token usage analytics and reports
+  session              Inspect and record Claude Code session messages
+  plugin               Claude Code plugin hooks (machine-invoked)
+  completion <shell>   Print shell completion script (bash | zsh | fish)
+```
 
 ---
 
@@ -81,7 +105,18 @@ tokensmith memory clean              # removes archived memories
 tokensmith memory clean --all        # wipes the namespace
 ```
 
-![Memory table placeholder](./docs/screenshot-memory.png)
+```text
+$ tokensmith memory list
+╭──────────────┬──────────┬────────┬───────────┬─────────────────────╮
+│ key          │ priority │ tokens │ tags      │ updated             │
+├──────────────┼──────────┼────────┼───────────┼─────────────────────┤
+│ deploy-rules │ critical │ 4      │ policy    │ 2026-04-23 16:54:04 │
+├──────────────┼──────────┼────────┼───────────┼─────────────────────┤
+│ payments     │ normal   │ 8      │ payments  │ 2026-04-23 16:54:04 │
+├──────────────┼──────────┼────────┼───────────┼─────────────────────┤
+│ api-base     │ critical │ 10     │ api, urls │ 2026-04-23 16:54:04 │
+╰──────────────┴──────────┴────────┴───────────┴─────────────────────╯
+```
 
 ### Skills
 
@@ -125,7 +160,21 @@ tokensmith tokens report          # last 14 days
 tokensmith tokens recent --limit 50
 ```
 
-![Analytics screenshot placeholder](./docs/screenshot-analytics.png)
+```text
+$ tokensmith tokens stats
+
+Token stats — my-project
+────────────────────────
+Overall: raw 44 → effective 22 (50.0% reduction)
+ℹ 4 events · 0 sessions · model claude-sonnet-4-6
+╭───────────────┬─────┬───────────┬───────┬───────────┬────────╮
+│ kind          │ raw │ effective │ saved │ reduction │ events │
+├───────────────┼─────┼───────────┼───────┼───────────┼────────┤
+│ context_build │ 22  │ 22        │ 0     │ 0.0%      │ 1      │
+├───────────────┼─────┼───────────┼───────┼───────────┼────────┤
+│ memory_save   │ 22  │ 0         │ 22    │ 100.0%    │ 3      │
+╰───────────────┴─────┴───────────┴───────┴───────────┴────────╯
+```
 
 ### Export / import
 
