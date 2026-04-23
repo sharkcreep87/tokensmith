@@ -1,0 +1,28 @@
+{
+  "$schema": "./token-smith.schema.json",
+  "dbPath": ".tokensmith/tokensmith.db",
+  "projectRoot": ".",
+  "namespace": "auto",
+  "tokenModel": "o200k_base",
+  "preferredModel": "claude-sonnet-4-6",
+  "compression": {
+    "threshold": 8000,
+    "targetRatio": 0.2,
+    "keepLastMessages": 4
+  },
+  "context": {
+    "maxTokens": 4000,
+    "keywordWeight": 0.6,
+    "recencyWeight": 0.25,
+    "priorityWeight": 0.15,
+    "includeSkills": true,
+    "includeMemories": true,
+    "includeSummaries": true
+  },
+  "analytics": {
+    "baselineModel": "claude-sonnet-4-6",
+    "warningTokens": 80000
+  },
+  "autoSaveMemories": false,
+  "logLevel": "info"
+}

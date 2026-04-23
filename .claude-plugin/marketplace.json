@@ -1,0 +1,18 @@
+{
+  "$schema": "https://raw.githubusercontent.com/anthropics/claude-code/main/schemas/marketplace.schema.json",
+  "name": "tokensmith-marketplace",
+  "owner": {
+    "name": "TokenSmith Contributors",
+    "url": "https://github.com/sharkcreep87/tokensmith"
+  },
+  "plugins": [
+    {
+      "name": "tokensmith",
+      "displayName": "TokenSmith",
+      "description": "Save Claude tokens with persistent memory, smart context, and auto compression.",
+      "version": "1.0.0",
+      "source": ".",
+      "tags": ["tokens", "memory", "compression", "context", "analytics"]
+    }
+  ]
+}

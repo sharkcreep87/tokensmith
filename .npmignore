@@ -1,0 +1,12 @@
+src/
+node_modules/
+coverage/
+.tokensmith/
+.tokensmith-test/
+.env
+.env.*
+tsconfig*.json
+vitest.config.ts
+*.test.ts
+.github/
+.git/

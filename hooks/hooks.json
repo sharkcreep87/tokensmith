@@ -1,0 +1,45 @@
+{
+  "$schema": "https://raw.githubusercontent.com/anthropics/claude-code/main/schemas/hooks.schema.json",
+  "hooks": {
+    "SessionStart": [
+      {
+        "description": "Open the TokenSmith DB for this project",
+        "matcher": "*",
+        "command": "tokensmith plugin hook session-start",
+        "timeoutMs": 5000
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "description": "Inject smart context and auto-compress if needed",
+        "matcher": "*",
+        "command": "tokensmith plugin hook user-prompt-submit",
+        "timeoutMs": 10000
+      }
+    ],
+    "PreToolUse": [
+      {
+        "description": "Log tool invocation for analytics",
+        "matcher": "*",
+        "command": "tokensmith plugin hook before-tool-use",
+        "timeoutMs": 3000
+      }
+    ],
+    "PostToolUse": [
+      {
+        "description": "Optionally auto-save meaningful tool outputs",
+        "matcher": "*",
+        "command": "tokensmith plugin hook after-tool-use",
+        "timeoutMs": 3000
+      }
+    ],
+    "SessionEnd": [
+      {
+        "description": "Summarise session and close DB",
+        "matcher": "*",
+        "command": "tokensmith plugin hook session-end",
+        "timeoutMs": 15000
+      }
+    ]
+  }
+}

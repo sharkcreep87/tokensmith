@@ -1,0 +1,28 @@
+{
+  "$schema": "https://raw.githubusercontent.com/anthropics/claude-code/main/schemas/plugin.schema.json",
+  "name": "tokensmith",
+  "displayName": "TokenSmith",
+  "version": "1.0.0",
+  "description": "Save Claude token usage through persistent memory, reusable skills, smart context injection, session compression, and usage analytics.",
+  "author": "TokenSmith Contributors",
+  "license": "MIT",
+  "homepage": "https://github.com/sharkcreep87/tokensmith#readme",
+  "keywords": ["tokens", "memory", "context", "compression", "analytics"],
+  "commands": "./commands",
+  "hooks": "./hooks/hooks.json",
+  "skills": "./skills",
+  "entrypoint": {
+    "type": "cli",
+    "binary": "tokensmith"
+  },
+  "requirements": {
+    "node": ">=20.0.0"
+  },
+  "capabilities": [
+    "persistent-memory",
+    "skills-library",
+    "smart-context-injection",
+    "auto-compression",
+    "token-analytics"
+  ]
+}
