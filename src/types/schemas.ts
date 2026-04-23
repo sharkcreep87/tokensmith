@@ -105,7 +105,25 @@ export const configFileSchema = z.object({
       priorityWeight: z.number().min(0).max(1).optional(),
       includeSkills: z.boolean().optional(),
       includeMemories: z.boolean().optional(),
-      includeSummaries: z.boolean().optional()
+      includeSummaries: z.boolean().optional(),
+      minInjectionScore: z.number().min(0).max(1).optional()
+    })
+    .optional(),
+  grounding: z
+    .object({
+      mode: z.enum(["strict", "normal", "off"]).optional(),
+      verbatimCritical: z.boolean().optional(),
+      includeHeader: z.boolean().optional(),
+      citeSources: z.boolean().optional()
+    })
+    .optional(),
+  performance: z
+    .object({
+      hookBudgetMs: z.number().int().positive().max(60_000).optional(),
+      sessionStartBudgetMs: z.number().int().positive().max(60_000).optional(),
+      toolHookBudgetMs: z.number().int().positive().max(60_000).optional(),
+      sessionEndBudgetMs: z.number().int().positive().max(60_000).optional(),
+      disabled: z.boolean().optional()
     })
     .optional(),
   analytics: z

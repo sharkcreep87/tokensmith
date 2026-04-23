@@ -35,11 +35,14 @@ describe("ContextService", () => {
     expect(bundle.renderedText).toContain("payment-api");
   });
 
-  it("falls back to an empty bundle when nothing matches", () => {
+  it("falls back to an empty bundle (silent) when nothing matches", () => {
     const { services } = sandbox.container;
     const bundle = services.context.build({ query: "nothing at all" });
     expect(bundle.memories).toHaveLength(0);
     expect(bundle.skills).toHaveLength(0);
-    expect(bundle.renderedText).toContain("No relevant stored context");
+    // With default strict grounding we prefer silence over irrelevant
+    // context — the plugin will inject NOTHING rather than risk a
+    // hallucination trigger.
+    expect(bundle.renderedText).toBe("");
   });
 });

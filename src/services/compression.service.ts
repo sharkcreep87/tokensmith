@@ -75,8 +75,17 @@ export class CompressionService {
     }
 
     const targetTokenCount = Math.max(100, Math.floor(originalTokens * targetRatio));
-    const summaryText = this.summariser(toCompress, targetTokenCount, this.tokens);
+    const rawSummary = this.summariser(toCompress, targetTokenCount, this.tokens);
+    const summaryText = labelSummary(rawSummary);
     const compressedTokens = this.tokens.count(summaryText);
+
+    // Fidelity guard: if compression didn't actually shrink the payload,
+    // something went wrong (e.g. too-short a transcript). Don't commit a
+    // "summary" larger than the original — that would waste tokens AND risk
+    // the model treating paraphrased text as authoritative.
+    if (compressedTokens >= originalTokens) {
+      throw new NotFoundError("UsableSummary", sessionId);
+    }
 
     const summary = this.repos.summary.create({
       namespace,
@@ -144,8 +153,13 @@ export class CompressionService {
       throw new NotFoundError("Project messages", namespace);
     }
     const targetTokenCount = Math.max(200, Math.floor(originalTokens * targetRatio));
-    const summaryText = this.summariser(messages, targetTokenCount, this.tokens);
+    const rawSummary = this.summariser(messages, targetTokenCount, this.tokens);
+    const summaryText = labelSummary(rawSummary);
     const compressedTokens = this.tokens.count(summaryText);
+
+    if (compressedTokens >= originalTokens) {
+      throw new NotFoundError("UsableSummary", namespace);
+    }
 
     const summary = this.repos.summary.create({
       namespace,
@@ -187,6 +201,20 @@ export class CompressionService {
  * another LLM call. In production you can inject an LLM-backed summariser via
  * the service constructor for better quality.
  */
+/**
+ * Prefix every summary with a standing warning. When Claude later reads the
+ * summary via the context bundle it sees an explicit reminder that the text
+ * is lossy — which materially reduces the chance it treats summarised claims
+ * as authoritative.
+ */
+function labelSummary(raw: string): string {
+  const prefix =
+    "[COMPRESSED SUMMARY — lossy extract of prior conversation. Verify before acting.]";
+  const trimmed = raw.trim();
+  if (!trimmed) return prefix;
+  return `${prefix}\n\n${trimmed}`;
+}
+
 export const defaultSummariser: SummariserFn = (messages, targetTokenCount, tokens) => {
   if (messages.length === 0) return "";
   const joined = messages

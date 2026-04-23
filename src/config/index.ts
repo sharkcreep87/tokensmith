@@ -34,6 +34,20 @@ export interface ResolvedConfig {
     includeSkills: boolean;
     includeMemories: boolean;
     includeSummaries: boolean;
+    minInjectionScore: number;
+  };
+  readonly grounding: {
+    mode: "strict" | "normal" | "off";
+    verbatimCritical: boolean;
+    includeHeader: boolean;
+    citeSources: boolean;
+  };
+  readonly performance: {
+    hookBudgetMs: number;
+    sessionStartBudgetMs: number;
+    toolHookBudgetMs: number;
+    sessionEndBudgetMs: number;
+    disabled: boolean;
   };
   readonly analytics: {
     baselineModel: string;
@@ -71,7 +85,27 @@ const DEFAULTS: ResolvedConfig = {
     priorityWeight: 0.15,
     includeSkills: true,
     includeMemories: true,
-    includeSummaries: true
+    includeSummaries: true,
+    // Below this blended score we decline to inject an item — silence is
+    // better than bad context. 0.12 ≈ "at least one strong keyword match or
+    // a critical-priority item".
+    minInjectionScore: 0.12
+  },
+  grounding: {
+    mode: "strict",
+    verbatimCritical: true,
+    includeHeader: true,
+    citeSources: true
+  },
+  performance: {
+    // Hard ceilings chosen to stay well under each hook's outer Claude Code
+    // timeout (see hooks/hooks.json). If the work doesn't finish within the
+    // budget we fail open with an empty response.
+    hookBudgetMs: 250,
+    sessionStartBudgetMs: 150,
+    toolHookBudgetMs: 100,
+    sessionEndBudgetMs: 1000,
+    disabled: false
   },
   analytics: {
     baselineModel: "claude-sonnet-4-6",
@@ -169,6 +203,8 @@ export function loadConfig(options: LoadConfigOptions = {}): ResolvedConfig {
       ...stripUndefined(envConfig.compression ?? {})
     },
     context: { ...fileConfig.context },
+    grounding: { ...fileConfig.grounding },
+    performance: { ...fileConfig.performance },
     analytics: {
       ...fileConfig.analytics,
       ...stripUndefined(envConfig.analytics ?? {})
@@ -218,7 +254,32 @@ export function loadConfig(options: LoadConfigOptions = {}): ResolvedConfig {
       includeMemories:
         merged.context?.includeMemories ?? DEFAULTS.context.includeMemories,
       includeSummaries:
-        merged.context?.includeSummaries ?? DEFAULTS.context.includeSummaries
+        merged.context?.includeSummaries ?? DEFAULTS.context.includeSummaries,
+      minInjectionScore:
+        merged.context?.minInjectionScore ?? DEFAULTS.context.minInjectionScore
+    },
+    grounding: {
+      mode: merged.grounding?.mode ?? DEFAULTS.grounding.mode,
+      verbatimCritical:
+        merged.grounding?.verbatimCritical ?? DEFAULTS.grounding.verbatimCritical,
+      includeHeader:
+        merged.grounding?.includeHeader ?? DEFAULTS.grounding.includeHeader,
+      citeSources:
+        merged.grounding?.citeSources ?? DEFAULTS.grounding.citeSources
+    },
+    performance: {
+      hookBudgetMs:
+        merged.performance?.hookBudgetMs ?? DEFAULTS.performance.hookBudgetMs,
+      sessionStartBudgetMs:
+        merged.performance?.sessionStartBudgetMs ??
+        DEFAULTS.performance.sessionStartBudgetMs,
+      toolHookBudgetMs:
+        merged.performance?.toolHookBudgetMs ??
+        DEFAULTS.performance.toolHookBudgetMs,
+      sessionEndBudgetMs:
+        merged.performance?.sessionEndBudgetMs ??
+        DEFAULTS.performance.sessionEndBudgetMs,
+      disabled: merged.performance?.disabled ?? DEFAULTS.performance.disabled
     },
     analytics: {
       baselineModel:

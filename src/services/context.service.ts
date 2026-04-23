@@ -22,11 +22,21 @@ interface Weighted<T> {
 /**
  * Smart context engine.
  *
- * We deliberately stick to deterministic, explainable scoring (keyword +
- * recency + priority) rather than bundling an embeddings model — the goal of
- * TokenSmith is to SAVE tokens, not spend them on a relevance model. The
- * architecture supports swapping in semantic ranking later by implementing a
- * `Ranker` interface (see BONUS notes in README).
+ * This module has TWO responsibilities that both directly affect Claude's
+ * output quality:
+ *
+ *  1. Pick relevant memories/skills/summaries within a strict token budget.
+ *  2. Render them in a form that minimises the risk of hallucination:
+ *     - a grounding preamble that tells Claude how to treat the injection,
+ *     - per-item provenance (key, tags, priority, updated date) so Claude
+ *       can cite instead of invent,
+ *     - verbatim preservation of `critical` memories (never truncated),
+ *     - a minimum confidence threshold — we would rather inject nothing
+ *       than inject weakly-related context that could pull Claude off-topic.
+ *
+ * Ranking stays deterministic (keyword + recency + priority). That is the
+ * right trade-off for an anti-hallucination tool: the plumbing must be
+ * explainable and reproducible, not another black box.
  */
 export class ContextService {
   public constructor(
@@ -39,9 +49,16 @@ export class ContextService {
     const parsed = parseOrThrow(contextQueryInputSchema, input);
     const namespace = parsed.namespace ?? this.config.namespace;
     const tokenBudget = parsed.tokenBudget ?? this.config.context.maxTokens;
-    const includeMemories = parsed.includeMemories ?? this.config.context.includeMemories;
-    const includeSkills = parsed.includeSkills ?? this.config.context.includeSkills;
-    const includeSummaries = parsed.includeSummaries ?? this.config.context.includeSummaries;
+    const includeMemories =
+      parsed.includeMemories ?? this.config.context.includeMemories;
+    const includeSkills =
+      parsed.includeSkills ?? this.config.context.includeSkills;
+    const includeSummaries =
+      parsed.includeSummaries ?? this.config.context.includeSummaries;
+
+    if (this.config.grounding.mode === "off") {
+      return this.emptyBundle(namespace, parsed.query, tokenBudget);
+    }
 
     const memoryResults = includeMemories
       ? this.rankMemories(parsed.query, this.repos.memory.listAll(namespace))
@@ -53,15 +70,33 @@ export class ContextService {
       ? this.rankSummaries(parsed.query, this.repos.summary.listAll(namespace))
       : [];
 
-    const selectedMemories = this.fitBudget(memoryResults, Math.floor(tokenBudget * 0.55));
-    const selectedSkills = this.fitBudget(skillResults, Math.floor(tokenBudget * 0.2));
-    const selectedSummaries = this.fitBudget(summaryResults, Math.floor(tokenBudget * 0.25));
+    // Apply the confidence floor. Critical memories are never filtered out —
+    // by definition the user wants them available even without keyword match.
+    const minScore = this.config.context.minInjectionScore;
+    const memoryPool = memoryResults.filter(
+      (r) => r.score >= minScore || r.item.priority === "critical"
+    );
+    const skillPool = skillResults.filter((r) => r.score >= minScore);
+    const summaryPool = summaryResults.filter((r) => r.score >= minScore);
 
-    const renderedText = renderBundle({
+    const selectedMemories = this.fitBudget(
+      memoryPool,
+      Math.floor(tokenBudget * 0.55)
+    );
+    const selectedSkills = this.fitBudget(
+      skillPool,
+      Math.floor(tokenBudget * 0.2)
+    );
+    const selectedSummaries = this.fitBudget(
+      summaryPool,
+      Math.floor(tokenBudget * 0.25)
+    );
+
+    const renderedText = this.renderBundle({
       query: parsed.query,
-      memories: selectedMemories.map((r) => r.item),
-      skills: selectedSkills.map((r) => r.item),
-      summaries: selectedSummaries.map((r) => r.item)
+      memories: selectedMemories,
+      skills: selectedSkills,
+      summaries: selectedSummaries
     });
 
     const tokenCount = this.tokens.count(renderedText);
@@ -85,7 +120,9 @@ export class ContextService {
         memoryCount: bundle.memories.length,
         skillCount: bundle.skills.length,
         summaryCount: bundle.summaries.length,
-        tokenBudget
+        tokenBudget,
+        minScore,
+        groundingMode: this.config.grounding.mode
       }
     });
 
@@ -102,19 +139,36 @@ export class ContextService {
       .map((r) => ({ item: r.item, score: r.score }));
   }
 
-  private rankMemories(query: string, items: Memory[]): Array<Weighted<Memory>> {
+  private rankMemories(
+    query: string,
+    items: Memory[]
+  ): Array<Weighted<Memory>> {
     const { keywordWeight, recencyWeight, priorityWeight } = this.config.context;
     return items
       .map((item) => {
         const haystack = `${item.key} ${item.content} ${item.tags.join(" ")}`;
         const kw = keywordScore(query, haystack);
         const rec = recencyScore(item.updatedAt);
-        const pri = item.priority === "critical" ? 1 : item.priority === "normal" ? 0.5 : 0.1;
+        const pri =
+          item.priority === "critical"
+            ? 1
+            : item.priority === "normal"
+              ? 0.5
+              : 0.1;
+
+        // Anti-hallucination guardrail: a non-critical memory must have at
+        // least SOME keyword overlap with the query to be considered
+        // relevant. Recency and priority alone are not enough — otherwise
+        // we'd inject any-recent-memory into any-query, which is exactly
+        // how "confidently wrong" context ends up in the prompt.
+        if (item.priority !== "critical" && kw === 0) {
+          return { item, score: 0, tokens: item.tokenCount };
+        }
+
         const score =
           kw * keywordWeight + rec * recencyWeight + pri * priorityWeight;
         return { item, score, tokens: item.tokenCount };
       })
-      .filter((r) => r.score > 0 || r.item.priority === "critical")
       .sort((a, b) => b.score - a.score);
   }
 
@@ -125,7 +179,6 @@ export class ContextService {
         const score = keywordScore(query, haystack);
         return { item, score, tokens: item.tokenCount };
       })
-      .filter((r) => r.score > 0)
       .sort((a, b) => b.score - a.score);
   }
 
@@ -140,7 +193,6 @@ export class ContextService {
           recencyScore(item.createdAt) * 0.3;
         return { item, score, tokens: item.compressedTokenCount };
       })
-      .filter((r) => r.score > 0)
       .sort((a, b) => b.score - a.score);
   }
 
@@ -158,49 +210,134 @@ export class ContextService {
     }
     return picked;
   }
+
+  private emptyBundle(
+    namespace: string,
+    query: string,
+    tokenBudget: number
+  ): ContextBundle {
+    return {
+      namespace,
+      query,
+      tokenBudget,
+      memories: [],
+      skills: [],
+      summaries: [],
+      renderedText: "",
+      tokenCount: 0
+    };
+  }
+
+  private renderBundle(params: {
+    query: string;
+    memories: Array<Weighted<Memory>>;
+    skills: Array<Weighted<Skill>>;
+    summaries: Array<Weighted<Summary>>;
+  }): string {
+    const { grounding } = this.config;
+    const nothingMatched =
+      params.memories.length === 0 &&
+      params.skills.length === 0 &&
+      params.summaries.length === 0;
+
+    // If strict grounding is on and nothing scored above the threshold we
+    // inject an empty string. Silence is the anti-hallucination default.
+    if (nothingMatched && grounding.mode === "strict") return "";
+
+    const parts: string[] = [];
+
+    if (grounding.includeHeader) {
+      parts.push(GROUNDING_HEADER(params.query, grounding.mode));
+    } else {
+      parts.push(`# TokenSmith context for: ${params.query}`);
+    }
+
+    if (params.memories.length) {
+      parts.push("\n## Project memories (sourced from TokenSmith store)");
+      for (const { item, score } of params.memories) {
+        parts.push(this.renderMemory(item, score));
+      }
+    }
+
+    if (params.skills.length) {
+      parts.push("\n## Available skills");
+      for (const { item } of params.skills) {
+        const desc = item.description ? ` — ${item.description}` : "";
+        parts.push(`- **${item.name}**${desc} _(id: skill:${item.id})_`);
+      }
+    }
+
+    if (params.summaries.length) {
+      parts.push("\n## Prior-session summaries (may be abridged)");
+      for (const { item } of params.summaries) {
+        parts.push(
+          `### ${item.title} _(id: summary:${item.id}, ${item.createdAt})_`
+        );
+        parts.push(
+          "> ⚠️ This is a compressed summary. Verify facts against the user " +
+            "or source before relying on them."
+        );
+        parts.push(item.content.trim());
+      }
+    }
+
+    if (nothingMatched) {
+      parts.push(
+        "\n_No relevant stored context met the confidence threshold — do not infer additional context from TokenSmith._"
+      );
+    }
+
+    return parts.join("\n");
+  }
+
+  private renderMemory(memory: Memory, score: number): string {
+    const cite = this.config.grounding.citeSources
+      ? ` _(id: memory:${memory.id}, priority=${memory.priority}, score=${score.toFixed(2)}, updated=${memory.updatedAt})_`
+      : "";
+    const tagLine = memory.tags.length ? ` [${memory.tags.join(", ")}]` : "";
+
+    // Critical memories are injected verbatim — no truncation, no
+    // reformatting — so Claude can never paraphrase them into something
+    // subtly wrong.
+    const verbatim =
+      this.config.grounding.verbatimCritical && memory.priority === "critical";
+    const body = verbatim
+      ? `\`\`\`\n${memory.content}\n\`\`\``
+      : memory.content.trim();
+
+    return `- **${memory.key}**${tagLine}${cite}:\n${body}`;
+  }
 }
 
-function renderBundle(params: {
-  query: string;
-  memories: Memory[];
-  skills: Skill[];
-  summaries: Summary[];
-}): string {
-  const parts: string[] = [];
-  parts.push(`# TokenSmith context for: ${params.query}`);
+/**
+ * System-message preamble injected with every non-empty bundle. These
+ * instructions are the primary anti-hallucination lever: they tell Claude
+ * how much authority to grant the injected context and when to push back.
+ */
+const GROUNDING_HEADER = (query: string, mode: "strict" | "normal" | "off"): string => `
+# TokenSmith grounded context (mode: ${mode})
 
-  if (params.memories.length) {
-    parts.push("\n## Relevant memories");
-    for (const m of params.memories) {
-      parts.push(`- (${m.priority}) **${m.key}**${m.tags.length ? ` [${m.tags.join(", ")}]` : ""}:\n${m.content.trim()}`);
-    }
-  }
+The following context was retrieved from the TokenSmith store for the query:
+**${query}**
 
-  if (params.skills.length) {
-    parts.push("\n## Relevant skills");
-    for (const s of params.skills) {
-      const desc = s.description ? ` — ${s.description}` : "";
-      parts.push(`- **${s.name}**${desc}`);
-    }
-  }
+Treat this block as supplementary reference material. Follow these rules:
 
-  if (params.summaries.length) {
-    parts.push("\n## Previous session summaries");
-    for (const s of params.summaries) {
-      parts.push(`### ${s.title}\n${s.content.trim()}`);
-    }
-  }
+1. **Cite, don't invent.** If you quote from this block, reference it by its
+   bracketed id (e.g. \`memory:abc123\`). If no item answers the user's
+   question, say so plainly — do NOT fabricate details.
+2. **Prefer newer information.** If the live conversation or the current
+   filesystem contradicts a stored memory, trust the live information and
+   ask the user to confirm before updating the memory.
+3. **Never escalate uncertainty.** Items are labelled \`priority=archive\`
+   when they may be stale. Lower your confidence accordingly.
+4. **Verbatim is verbatim.** Items rendered inside fenced code blocks are
+   stored verbatim. Do not paraphrase or summarise them when quoting.
+5. **Summaries are lossy.** Sections marked "summary" are compressed and may
+   omit details. Verify critical facts with the user before acting.
 
-  if (
-    params.memories.length === 0 &&
-    params.skills.length === 0 &&
-    params.summaries.length === 0
-  ) {
-    parts.push("\n_No relevant stored context found._");
-  }
-
-  return parts.join("\n");
-}
+If this block is empty, do not mention TokenSmith to the user — simply answer
+from the live context and the user's request.
+`.trim();
 
 function sumTokens(buckets: Array<Array<Weighted<unknown>>>): number {
   let total = 0;

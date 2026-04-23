@@ -267,6 +267,113 @@ skills/           # ready-to-use skill templates
 
 ---
 
+## Performance guarantees
+
+TokenSmith runs inside the critical path of every Claude Code turn, so its
+hooks are engineered to be effectively invisible to the user:
+
+| Hook | Internal budget | Outer Claude Code timeout | Fail-open? |
+|---|---|---|---|
+| `SessionStart` | **150 ms** | 2000 ms | ✅ empty response |
+| `UserPromptSubmit` | **250 ms** | 3000 ms | ✅ empty response, no injection |
+| `PreToolUse` | **100 ms** | 1500 ms | ✅ empty response |
+| `PostToolUse` | **100 ms** | 1500 ms | ✅ empty response |
+| `SessionEnd` | **1000 ms** | 5000 ms | ✅ empty response |
+
+What this means in practice:
+
+- **Hard deadlines.** Every hook is wrapped in `withTimeout()`. If the work
+  isn't finished within the internal budget, TokenSmith returns a valid empty
+  response with `perf.timedOut: true` and Claude Code proceeds normally. No
+  turn is ever blocked waiting for TokenSmith.
+- **Never throws.** Every hook path catches exceptions and returns a
+  structured `{ ok: false }` JSON response. Claude Code never sees a
+  non-zero exit code or stack trace from us.
+- **Lazy container.** The SQLite DB, tokenizer, and config are opened lazily
+  when the first command that needs them runs; irrelevant hooks stay close
+  to zero-cost.
+- **Tuned SQLite.** WAL journalling, `NORMAL` synchronous mode, a 20 MB page
+  cache, a 64 MB mmap window and `MEMORY` temp store keep every query under
+  a few milliseconds for the sub-megabyte stores TokenSmith produces.
+- **Global kill switch.** Set `TOKENSMITH_DISABLED=1` (env var) or
+  `performance.disabled: true` (config) and every hook returns in under
+  1 ms with zero side effects. Nothing else changes.
+- **Telemetry on every response.** Each hook attaches
+  `perf: { elapsedMs, timedOut }` so the operator can alert on regressions.
+
+Measured on a 2026 laptop with ~20 memories in the store:
+
+```
+run=1 wall=211ms internal=7.3ms  injections=1 contextTokens=417
+run=2 wall=228ms internal=8.2ms  injections=1 contextTokens=417
+run=3 wall=198ms internal=8.8ms  injections=1 contextTokens=417
+```
+
+Most of the wall time is Node startup (shared with every other plugin hook);
+TokenSmith's own work is **single-digit milliseconds** per turn.
+
+---
+
+## Anti-hallucination guarantees
+
+Injecting retrieved context into a prompt is a two-sided trade: it gives the
+model authoritative-looking text, which means bad retrievals can *cause*
+hallucinations. TokenSmith mitigates that risk with several defence layers,
+all on by default:
+
+1. **Confidence floor.** Non-critical memories need at least one keyword
+   overlap with the user's query AND a blended score ≥ `minInjectionScore`
+   (0.12 by default) to be eligible. Weak matches are dropped, not "mostly
+   shown" — there is no partial credit.
+2. **Strict grounding mode.** When the bundle is empty, the plugin injects
+   **nothing**. Silence is always preferred to irrelevant context.
+3. **Grounding preamble.** Every non-empty bundle starts with an explicit
+   system message that tells Claude:
+   - to cite items by id rather than paraphrase them,
+   - to prefer live conversation over stored memory on conflicts,
+   - that lower-priority items may be stale,
+   - that summaries are lossy and must be verified before action.
+4. **Provenance on every item.** Each memory/skill/summary carries its id,
+   priority, score, and last-updated timestamp — so Claude can cite
+   (`memory:abc123`) instead of inventing.
+5. **Verbatim critical memories.** Items with `priority: critical` are
+   rendered inside fenced code blocks. They are never truncated,
+   reformatted, or summarised by TokenSmith, and the grounding header
+   instructs Claude not to paraphrase them either.
+6. **Labelled summaries.** Every compressed summary is prefixed with
+   `[COMPRESSED SUMMARY — lossy extract of prior conversation. Verify before
+   acting.]` so the model treats it as auxiliary, not authoritative.
+7. **Fidelity guard.** If compression would produce a "summary" larger than
+   the original, we refuse to commit it — preventing paraphrased bloat from
+   masquerading as source material.
+8. **No LLM summariser by default.** The default summariser is a
+   deterministic extractive ranker over the original sentences; it cannot
+   invent content, only drop it. An LLM-backed summariser can be swapped in
+   via `new CompressionService(repos, tokens, config, customFn)` if you
+   explicitly want that trade-off.
+9. **Per-namespace isolation.** Memories are scoped to the current git repo
+   by default, so a memory from one project can never leak into another.
+
+You can tune or disable any of these in `token-smith.config.json`:
+
+```json
+{
+  "context":   { "minInjectionScore": 0.12 },
+  "grounding": {
+    "mode": "strict",           // "strict" | "normal" | "off"
+    "verbatimCritical": true,
+    "includeHeader": true,
+    "citeSources": true
+  }
+}
+```
+
+Setting `grounding.mode: "off"` disables all context injection entirely —
+useful when debugging or when you want Claude to rely solely on live
+conversation.
+
+---
+
 ## Security
 
 - All SQL is parameterised (`better-sqlite3` prepared statements).

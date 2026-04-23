@@ -1,44 +1,45 @@
 {
   "$schema": "https://raw.githubusercontent.com/anthropics/claude-code/main/schemas/hooks.schema.json",
+  "_comment": "Outer Claude Code timeouts are generous ceilings. TokenSmith enforces a MUCH tighter internal budget (see config.performance.*) and always returns a structured no-op response before the outer timeout fires, so the hook never blocks the session.",
   "hooks": {
     "SessionStart": [
       {
-        "description": "Open the TokenSmith DB for this project",
+        "description": "Open the TokenSmith DB for this project (internal budget: 150ms)",
         "matcher": "*",
         "command": "tokensmith plugin hook session-start",
-        "timeoutMs": 5000
+        "timeoutMs": 2000
       }
     ],
     "UserPromptSubmit": [
       {
-        "description": "Inject smart context and auto-compress if needed",
+        "description": "Inject smart, grounded context (internal budget: 250ms)",
         "matcher": "*",
         "command": "tokensmith plugin hook user-prompt-submit",
-        "timeoutMs": 10000
+        "timeoutMs": 3000
       }
     ],
     "PreToolUse": [
       {
-        "description": "Log tool invocation for analytics",
+        "description": "Log tool invocation (internal budget: 100ms)",
         "matcher": "*",
         "command": "tokensmith plugin hook before-tool-use",
-        "timeoutMs": 3000
+        "timeoutMs": 1500
       }
     ],
     "PostToolUse": [
       {
-        "description": "Optionally auto-save meaningful tool outputs",
+        "description": "Optionally auto-save meaningful tool outputs (internal budget: 100ms)",
         "matcher": "*",
         "command": "tokensmith plugin hook after-tool-use",
-        "timeoutMs": 3000
+        "timeoutMs": 1500
       }
     ],
     "SessionEnd": [
       {
-        "description": "Summarise session and close DB",
+        "description": "Summarise session and close DB (internal budget: 1s)",
         "matcher": "*",
         "command": "tokensmith plugin hook session-end",
-        "timeoutMs": 15000
+        "timeoutMs": 5000
       }
     ]
   }

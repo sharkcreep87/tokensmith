@@ -26,8 +26,17 @@ export function openDatabase(dbPath: string): DB {
   try {
     fs.mkdirSync(path.dirname(dbPath), { recursive: true });
     const db = new Database(dbPath);
+    // Performance pragmas: WAL keeps writes off the main reader lock so the
+    // CLI and the Claude Code plugin hook can run concurrently. NORMAL
+    // synchronisation is safe with WAL and ~2x faster than FULL. Memory-backed
+    // temp store and a larger page cache keep hot queries under a few ms on
+    // the sub-megabyte DBs TokenSmith typically produces.
     db.pragma("journal_mode = WAL");
+    db.pragma("synchronous = NORMAL");
     db.pragma("foreign_keys = ON");
+    db.pragma("temp_store = MEMORY");
+    db.pragma("cache_size = -20000"); // ~20 MB page cache
+    db.pragma("mmap_size = 67108864"); // 64 MB memory-mapped I/O
     db.exec(SCHEMA_SQL);
 
     const row = db
