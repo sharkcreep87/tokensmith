@@ -1,7 +1,11 @@
 {
-  "name": "tokensmith",
+  "name": "@sharkcreep87/tokensmith",
   "version": "1.0.0",
   "description": "TokenSmith — a Claude Code plugin and CLI that saves token usage through persistent memory, reusable skills, smart context injection, session compression, and usage analytics.",
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "type": "module",
   "main": "dist/index.js",
   "module": "dist/index.js",

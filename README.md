@@ -29,12 +29,16 @@ summaries, and reports exactly how many tokens it saved you.
 
 ```bash
 # As an npm dependency (library + CLI)
-npm install -g tokensmith
+npm install -g @sharkcreep87/tokensmith
 
 # Verify
 tokensmith --version
 tokensmith init          # creates token-smith.config.json + .tokensmith/tokensmith.db
 ```
+
+> The npm package is scoped (`@sharkcreep87/tokensmith`), but the installed
+> binary is still called `tokensmith` (plus the `ts-smith` alias). You never
+> have to type the scope after install.
 
 ### Installing as a Claude Code plugin
 
@@ -232,6 +236,19 @@ npm run build                       # emit dist/
 npm test                            # run Vitest
 npm run test:coverage               # + v8 coverage report
 ```
+
+### Releasing
+
+Releases are cut automatically by GitHub Actions on any `v*` tag:
+
+```bash
+npm version patch --message "Release v%s"  # bumps + commits + tags
+git push --follow-tags                      # pushes tag → workflow runs → npm publish
+```
+
+The [`release.yml`](./.github/workflows/release.yml) workflow uses npm's
+trusted-publishing (OIDC) so no `NPM_TOKEN` secret is required and every
+tarball gets a signed provenance statement on npmjs.com.
 
 ### Project layout
 
