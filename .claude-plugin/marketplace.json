@@ -11,7 +11,7 @@
       "displayName": "TokenSmith",
       "description": "Save Claude tokens with persistent memory, smart context, and auto compression.",
       "version": "1.0.0",
-      "source": ".",
+      "source": "./",
       "tags": ["tokens", "memory", "compression", "context", "analytics"]
     }
   ]
