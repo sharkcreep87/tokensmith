@@ -1,4 +1,4 @@
-# Publish @sharkcreep87/tokensmith to npm when a `v*` tag is pushed.
+# Publish @sharkcreep/tokensmith to npm when a `v*` tag is pushed.
 #
 # Uses npm's trusted-publishing (OIDC) so:
 #   - NO `NPM_TOKEN` secret is needed — the workflow exchanges a GitHub
@@ -9,7 +9,7 @@
 # One-time setup on npmjs.com:
 #   1. Sign in as the publishing account.
 #   2. Go to https://www.npmjs.com/settings/~/packages and enable
-#      "Trusted Publishing" for @sharkcreep87/tokensmith.
+#      "Trusted Publishing" for @sharkcreep/tokensmith.
 #   3. Add this repository + `.github/workflows/release.yml` as the
 #      trusted publisher source.
 #

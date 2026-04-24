@@ -6,7 +6,7 @@
 </p>
 
 <p align="center">
-  <a href="https://www.npmjs.com/package/@sharkcreep87/tokensmith"><img alt="npm" src="https://img.shields.io/npm/v/%40sharkcreep87%2Ftokensmith?color=0891B2&label=npm"></a>
+  <a href="https://www.npmjs.com/package/@sharkcreep/tokensmith"><img alt="npm" src="https://img.shields.io/npm/v/%40sharkcreep%2Ftokensmith?color=0891B2&label=npm"></a>
   <a href="https://github.com/sharkcreep87/tokensmith/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/sharkcreep87/tokensmith/ci.yml?branch=main&label=CI"></a>
   <a href="./LICENSE"><img alt="MIT" src="https://img.shields.io/badge/license-MIT-0F172A"></a>
   <img alt="Node 20+" src="https://img.shields.io/badge/node-%3E%3D20-22D3EE">
@@ -67,14 +67,14 @@ Commands:
 
 ```bash
 # As an npm dependency (library + CLI)
-npm install -g @sharkcreep87/tokensmith
+npm install -g @sharkcreep/tokensmith
 
 # Verify
 tokensmith --version
 tokensmith init          # creates token-smith.config.json + .tokensmith/tokensmith.db
 ```
 
-> The npm package is scoped (`@sharkcreep87/tokensmith`), but the installed
+> The npm package is scoped (`@sharkcreep/tokensmith`), but the installed
 > binary is still called `tokensmith` (plus the `ts-smith` alias). You never
 > have to type the scope after install.
 
