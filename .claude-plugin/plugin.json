@@ -4,7 +4,10 @@
   "displayName": "TokenSmith",
   "version": "1.0.0",
   "description": "Save Claude token usage through persistent memory, reusable skills, smart context injection, session compression, and usage analytics.",
-  "author": "TokenSmith Contributors",
+  "author": {
+    "name": "TokenSmith Contributors",
+    "url": "https://github.com/sharkcreep87/tokensmith"
+  },
   "license": "MIT",
   "homepage": "https://github.com/sharkcreep87/tokensmith#readme",
   "keywords": ["tokens", "memory", "context", "compression", "analytics"],
