@@ -13,8 +13,10 @@ import { registerCompletionCommand } from "../commands/completion.js";
 import { registerPluginCommand } from "../commands/plugin.js";
 import { TokenSmithError } from "../utils/errors.js";
 import { error as errorLine } from "./ui.js";
+import { fileURLToPath } from "node:url";
+import { realpathSync } from "node:fs";
 
-const VERSION = "1.0.0";
+const VERSION = "1.0.2";
 
 /**
  * Build the CLI program. Exported so tests can inspect parsed commands.
@@ -84,10 +86,13 @@ export async function main(argv: string[]): Promise<number> {
 }
 
 // Running as a script (both `node dist/cli/index.js` and `tsx src/cli/index.ts`)?
+// Resolve symlinks on both sides so npm's bin symlink (e.g. /opt/homebrew/bin/tokensmith)
+// still matches the real module path.
 const isEntry = (() => {
   try {
-    const entryUrl = new URL(`file://${process.argv[1]}`).href;
-    return import.meta.url === entryUrl;
+    const here = realpathSync(fileURLToPath(import.meta.url));
+    const entry = realpathSync(process.argv[1] ?? "");
+    return here === entry;
   } catch {
     return false;
   }
